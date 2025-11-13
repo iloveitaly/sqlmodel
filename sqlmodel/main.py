@@ -558,6 +558,28 @@ class SQLModelMetaclass(ModelMetaclass, DeclarativeMeta):
         if config_table is True:
             # If it was passed by kwargs, ensure it's also set in config
             set_config_value(model=new_cls, parameter="table", value=config_table)
+            # Add keep_existing to allow table redefinition (useful for testing scenarios)
+            # keep_existing=True tells SQLAlchemy to keep the first table definition
+            # and ignore subsequent redefinitions, preventing duplicate index errors
+            # Only set if not already defined by the user
+            if not hasattr(new_cls, "__table_args__"):
+                new_cls.__table_args__ = {"keep_existing": True}
+            elif isinstance(new_cls.__table_args__, dict):
+                if "keep_existing" not in new_cls.__table_args__:
+                    new_cls.__table_args__["keep_existing"] = True
+            elif isinstance(new_cls.__table_args__, tuple):
+                # __table_args__ can be a tuple of (dict, ) or (arg1, arg2, ..., dict)
+                if len(new_cls.__table_args__) > 0 and isinstance(
+                    new_cls.__table_args__[-1], dict
+                ):
+                    if "keep_existing" not in new_cls.__table_args__[-1]:
+                        # Modify the dict in the tuple
+                        args_list = list(new_cls.__table_args__)
+                        args_list[-1] = {**args_list[-1], "keep_existing": True}
+                        new_cls.__table_args__ = tuple(args_list)
+                else:
+                    # Add a dict at the end
+                    new_cls.__table_args__ = (*new_cls.__table_args__, {"keep_existing": True})
             for k, v in get_model_fields(new_cls).items():
                 # convert FieldInfo definitions into sqlalchemy columns
                 col = get_column_from_field(v)
